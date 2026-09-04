@@ -76,6 +76,54 @@ class MenuEditar(discord.ui.View):
         self.add_item(SeleccionarCampo(discord_id))
 
 
+class RegistroModal(discord.ui.Modal, title="Registrar jugador"):
+    alias = discord.ui.TextInput(label="Alias", placeholder="Ej: Player01", max_length=32)
+    posicion_principal = discord.ui.TextInput(label="Posición principal", placeholder="Ej: MC", max_length=10)
+    posiciones_secundarias = discord.ui.TextInput(
+        label="Posiciones secundarias (o 'ninguna')", placeholder="Ej: MCD, MCO",
+        required=False, max_length=50
+    )
+    rango = discord.ui.TextInput(label="Rango", placeholder="Ej: Titular", required=False, max_length=30)
+
+    def __init__(self, usuario: discord.Member):
+        super().__init__()
+        self.usuario = usuario
+
+    async def on_submit(self, interaction: discord.Interaction):
+        secundarias = self.posiciones_secundarias.value.strip()
+        if secundarias.lower() in ("", "ninguna"):
+            secundarias = ""
+
+        db.registrar_jugador(
+            self.usuario.id, interaction.guild.id, str(self.usuario),
+            self.alias.value, self.posicion_principal.value,
+            secundarias, self.rango.value or "Sin rango"
+        )
+
+        embed = discord.Embed(title="✅ Jugador registrado", color=discord.Color.green())
+        embed.add_field(name="Discord", value=self.usuario.mention, inline=True)
+        embed.add_field(name="Alias", value=self.alias.value, inline=True)
+        embed.add_field(name="Posición principal", value=self.posicion_principal.value, inline=True)
+        await interaction.response.send_message(embed=embed)
+        await registrar_log(interaction.client, interaction.guild, interaction.user, "Registró jugador", self.alias.value)
+
+
+class AbrirFormularioRegistro(discord.ui.View):
+    def __init__(self, usuario: discord.Member, autor_id: int):
+        super().__init__(timeout=180)
+        self.usuario = usuario
+        self.autor_id = autor_id
+
+    @discord.ui.button(label="📝 Completar formulario de registro", style=discord.ButtonStyle.primary)
+    async def abrir(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.autor_id:
+            await interaction.response.send_message(
+                "❌ Solo quien ejecutó el comando puede completar este formulario.", ephemeral=True
+            )
+            return
+        await interaction.response.send_modal(RegistroModal(self.usuario))
+
+
 class StaffCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -83,43 +131,12 @@ class StaffCog(commands.Cog):
     @commands.command(name="registrar")
     @solo_staff()
     async def registrar(self, ctx, usuario: discord.Member):
-        """Registra un nuevo jugador con un mini asistente de preguntas."""
-
-        def check(m):
-            return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
-
-        preguntas = {
-            "alias": "¿Cuál es el **alias** del jugador?",
-            "posicion_principal": "¿Cuál es su **posición principal**? (ej: MC)",
-            "posiciones_secundarias": "¿Posiciones **secundarias**? (separadas por coma, o escribí `ninguna`)",
-            "rango": "¿Qué **rango** tiene?",
-        }
-        respuestas = {}
-
-        for campo, pregunta in preguntas.items():
-            await ctx.send(f"❓ {pregunta}")
-            try:
-                msg = await self.bot.wait_for("message", check=check, timeout=60)
-                respuestas[campo] = msg.content
-            except TimeoutError:
-                await ctx.send(embed=embed_error("Se acabó el tiempo. Volvé a usar `r!registrar` para intentarlo de nuevo."))
-                return
-
-        if respuestas["posiciones_secundarias"].lower() == "ninguna":
-            respuestas["posiciones_secundarias"] = ""
-
-        db.registrar_jugador(
-            usuario.id, ctx.guild.id, str(usuario),
-            respuestas["alias"], respuestas["posicion_principal"],
-            respuestas["posiciones_secundarias"], respuestas["rango"]
+        """Abre un formulario para registrar un nuevo jugador. Uso: r!registrar @usuario"""
+        embed = discord.Embed(
+            description=f"Tocá el botón para abrir el formulario y registrar a {usuario.mention}.",
+            color=discord.Color.blurple()
         )
-
-        embed = discord.Embed(title="✅ Jugador registrado", color=discord.Color.green())
-        embed.add_field(name="Discord", value=usuario.mention, inline=True)
-        embed.add_field(name="Alias", value=respuestas["alias"], inline=True)
-        embed.add_field(name="Posición principal", value=respuestas["posicion_principal"], inline=True)
-        await ctx.send(embed=embed)
-        await registrar_log(self.bot, ctx.guild, ctx.author, "Registró jugador", respuestas["alias"])
+        await ctx.send(embed=embed, view=AbrirFormularioRegistro(usuario, ctx.author.id))
 
     @commands.command(name="editar")
     @solo_staff()
