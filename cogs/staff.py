@@ -3,6 +3,7 @@ from discord.ext import commands
 from database import db
 from utils.permissions import solo_staff
 from utils.embeds import embed_error, embed_exito
+from utils.logs import registrar_log
 from config.settings import ESTADOS_VALIDOS
 
 
@@ -19,6 +20,7 @@ class ConfirmarEliminar(discord.ui.View):
         await interaction.response.edit_message(
             embed=embed_exito(f"{self.alias} fue eliminado de la base de datos."), view=None
         )
+        await registrar_log(interaction.client, interaction.guild, interaction.user, "Eliminó jugador", self.alias)
         self.confirmado = True
         self.stop()
 
@@ -55,8 +57,15 @@ class SeleccionarCampo(discord.ui.Select):
 
         try:
             msg = await interaction.client.wait_for("message", check=check, timeout=30)
+            valor_anterior = db.obtener_jugador(self.discord_id)[self.values[0]]
             db.actualizar_campo_jugador(self.discord_id, self.values[0], msg.content)
             await interaction.followup.send(embed=embed_exito(f"Campo **{self.values[0]}** actualizado."))
+            jugador = db.obtener_jugador(self.discord_id)
+            await registrar_log(
+                interaction.client, interaction.guild, interaction.user,
+                f"Modificó {self.values[0]}", jugador["alias"],
+                f"{valor_anterior or '—'} → {msg.content}"
+            )
         except TimeoutError:
             await interaction.followup.send(embed=embed_error("Se acabó el tiempo, no se hizo ningún cambio."))
 
@@ -110,6 +119,7 @@ class StaffCog(commands.Cog):
         embed.add_field(name="Alias", value=respuestas["alias"], inline=True)
         embed.add_field(name="Posición principal", value=respuestas["posicion_principal"], inline=True)
         await ctx.send(embed=embed)
+        await registrar_log(self.bot, ctx.guild, ctx.author, "Registró jugador", respuestas["alias"])
 
     @commands.command(name="editar")
     @solo_staff()
@@ -145,8 +155,13 @@ class StaffCog(commands.Cog):
         if not jugador:
             await ctx.send(embed=embed_error("Ese usuario no está registrado."))
             return
+        rango_anterior = jugador["rango"]
         db.actualizar_campo_jugador(usuario.id, "rango", nuevo_rango)
         await ctx.send(embed=embed_exito(f"Rango de {jugador['alias']} actualizado a **{nuevo_rango}**."))
+        await registrar_log(
+            self.bot, ctx.guild, ctx.author, "Cambió rango", jugador["alias"],
+            f"{rango_anterior} → {nuevo_rango}"
+        )
 
     @commands.command(name="estado")
     @solo_staff()
@@ -162,10 +177,14 @@ class StaffCog(commands.Cog):
             await ctx.send(embed=embed_error("Ese usuario no está registrado."))
             return
 
+        estado_anterior = jugador["estado"]
         db.actualizar_campo_jugador(usuario.id, "estado", nuevo_estado)
         await ctx.send(embed=embed_exito(f"Estado de {jugador['alias']} actualizado a **{nuevo_estado}**."))
+        await registrar_log(
+            self.bot, ctx.guild, ctx.author, "Cambió estado", jugador["alias"],
+            f"{estado_anterior} → {nuevo_estado}"
+        )
 
 
 async def setup(bot):
     await bot.add_cog(StaffCog(bot))
-  
