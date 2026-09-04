@@ -15,6 +15,9 @@ COGS = [
     "cogs.jugador",
     "cogs.staff",
     "cogs.config_cmds",
+    "cogs.partidos",
+    "cogs.plantilla",
+    "cogs.stats",
 ]
 
 
@@ -44,17 +47,31 @@ async def ayuda(ctx):
     embed = discord.Embed(title="📖 Comandos disponibles", color=discord.Color.blue())
     embed.add_field(
         name="👤 Jugadores",
-        value="`r!yo` `r!perfil @usuario` `r!posiciones` `r!jugadores`",
+        value="`r!yo` `r!perfil @usuario` `r!posiciones` `r!jugadores` `r!buscar <nombre>`",
+        inline=False
+    )
+    embed.add_field(
+        name="⚽ Partidos",
+        value="`r!partido` `r!convocatoria` `r!plantilla` `r!formacion`",
+        inline=False
+    )
+    embed.add_field(
+        name="📊 Estadísticas",
+        value="`r!stats` `r!stats @usuario`",
         inline=False
     )
     embed.add_field(
         name="🔒 Staff",
-        value="`r!registrar @usuario` `r!editar @usuario` `r!eliminar @usuario` `r!rango` `r!estado`",
+        value=(
+            "`r!registrar @usuario` `r!editar @usuario` `r!eliminar @usuario` "
+            "`r!rango` `r!estado` `r!gol` `r!asistencia`\n"
+            "`r!partido crear` `r!partido capitan` `r!partido finalizar`"
+        ),
         inline=False
     )
     embed.add_field(
         name="🔒 Administración",
-        value="`r!config` `r!config rol_staff @rol`",
+        value="`r!config` (ver todas las opciones con `r!config`)",
         inline=False
     )
     await ctx.send(embed=embed)
