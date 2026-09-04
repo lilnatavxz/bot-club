@@ -85,9 +85,11 @@ class RegistroModal(discord.ui.Modal, title="Registrar jugador"):
     )
     rango = discord.ui.TextInput(label="Rango", placeholder="Ej: Titular", required=False, max_length=30)
 
-    def __init__(self, usuario: discord.Member):
+    def __init__(self, usuario: discord.Member, guild: discord.Guild, canal_destino):
         super().__init__()
         self.usuario = usuario
+        self.guild = guild
+        self.canal_destino = canal_destino
 
     async def on_submit(self, interaction: discord.Interaction):
         secundarias = self.posiciones_secundarias.value.strip()
@@ -95,7 +97,7 @@ class RegistroModal(discord.ui.Modal, title="Registrar jugador"):
             secundarias = ""
 
         db.registrar_jugador(
-            self.usuario.id, interaction.guild.id, str(self.usuario),
+            self.usuario.id, self.guild.id, str(self.usuario),
             self.alias.value, self.posicion_principal.value,
             secundarias, self.rango.value or "Sin rango"
         )
@@ -104,24 +106,27 @@ class RegistroModal(discord.ui.Modal, title="Registrar jugador"):
         embed.add_field(name="Discord", value=self.usuario.mention, inline=True)
         embed.add_field(name="Alias", value=self.alias.value, inline=True)
         embed.add_field(name="Posición principal", value=self.posicion_principal.value, inline=True)
-        await interaction.response.send_message(embed=embed)
-        await registrar_log(interaction.client, interaction.guild, interaction.user, "Registró jugador", self.alias.value)
+
+        # Confirmación privada para quien completó el formulario
+        await interaction.response.send_message(embed=embed_exito("Registro completado. Ya se avisó en el servidor."))
+
+        # Aviso público en el canal correspondiente del servidor
+        if self.canal_destino:
+            await self.canal_destino.send(embed=embed)
+
+        await registrar_log(interaction.client, self.guild, interaction.user, "Registró jugador", self.alias.value)
 
 
 class AbrirFormularioRegistro(discord.ui.View):
-    def __init__(self, usuario: discord.Member, autor_id: int):
-        super().__init__(timeout=180)
+    def __init__(self, usuario: discord.Member, guild: discord.Guild, canal_destino):
+        super().__init__(timeout=300)
         self.usuario = usuario
-        self.autor_id = autor_id
+        self.guild = guild
+        self.canal_destino = canal_destino
 
     @discord.ui.button(label="📝 Completar formulario de registro", style=discord.ButtonStyle.primary)
     async def abrir(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.autor_id:
-            await interaction.response.send_message(
-                "❌ Solo quien ejecutó el comando puede completar este formulario.", ephemeral=True
-            )
-            return
-        await interaction.response.send_modal(RegistroModal(self.usuario))
+        await interaction.response.send_modal(RegistroModal(self.usuario, self.guild, self.canal_destino))
 
 
 class StaffCog(commands.Cog):
@@ -131,12 +136,28 @@ class StaffCog(commands.Cog):
     @commands.command(name="registrar")
     @solo_staff()
     async def registrar(self, ctx, usuario: discord.Member):
-        """Abre un formulario para registrar un nuevo jugador. Uso: r!registrar @usuario"""
+        """Manda un DM privado con el formulario de registro. Uso: r!registrar @usuario"""
+        conf = db.obtener_config(ctx.guild.id)
+        canal_destino = ctx.guild.get_channel(conf["canal_registros"]) if conf["canal_registros"] else ctx.channel
+
         embed = discord.Embed(
-            description=f"Tocá el botón para abrir el formulario y registrar a {usuario.mention}.",
+            description=f"Tocá el botón para completar el registro de {usuario.mention}.\n"
+                        f"Este formulario es privado — solo vos podés completarlo.",
             color=discord.Color.blurple()
         )
-        await ctx.send(embed=embed, view=AbrirFormularioRegistro(usuario, ctx.author.id))
+        vista = AbrirFormularioRegistro(usuario, ctx.guild, canal_destino)
+
+        try:
+            await ctx.author.send(embed=embed, view=vista)
+            await ctx.send(embed=discord.Embed(
+                description=f"📩 {ctx.author.mention}, te mandé un mensaje privado para completar el registro.",
+                color=discord.Color.blurple()
+            ))
+        except discord.Forbidden:
+            await ctx.send(embed=embed_error(
+                "No pude mandarte un mensaje privado. Activá los DMs para este servidor "
+                "(Configuración de privacidad del servidor) e intentá de nuevo."
+            ))
 
     @commands.command(name="editar")
     @solo_staff()
