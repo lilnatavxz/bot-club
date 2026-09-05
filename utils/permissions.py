@@ -1,28 +1,25 @@
-from database import db
+import discord
+from discord.ext import commands
 
 
-def es_staff(member) -> bool:
-    """Devuelve True si el usuario es administrador de Discord o tiene el rol staff configurado."""
+def es_encargado(member) -> bool:
+    """Devuelve True si el usuario es administrador de Discord o tiene el rol 'Encargados'."""
     if member.guild_permissions.administrator:
         return True
 
-    config = db.obtener_config(member.guild.id)
-    staff_role_id = config["staff_role_id"]
-    if not staff_role_id:
+    rol = discord.utils.get(member.guild.roles, name="Encargados")
+    if not rol:
         return False
 
-    return any(role.id == staff_role_id for role in member.roles)
+    return rol in member.roles
 
 
-def solo_staff():
-    """Decorador para comandos que requieren rol de staff configurado."""
-    from discord.ext import commands
-
+def solo_encargados():
+    """Decorador para comandos que requieren el rol Encargados (o ser administrador)."""
     async def predicate(ctx):
-        if es_staff(ctx.author):
+        if es_encargado(ctx.author):
             return True
         await ctx.send("❌ No tienes permisos para utilizar este comando.")
         return False
 
     return commands.check(predicate)
-  
