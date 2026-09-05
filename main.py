@@ -12,12 +12,8 @@ intents.message_content = True
 bot = commands.Bot(command_prefix=PREFIJO, intents=intents, help_command=None)
 
 COGS = [
-    "cogs.jugador",
-    "cogs.staff",
-    "cogs.config_cmds",
     "cogs.partidos",
-    "cogs.plantilla",
-    "cogs.stats",
+    "cogs.setup_servidor",
 ]
 
 
@@ -30,7 +26,7 @@ async def on_ready():
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
-        pass  # el mensaje de error ya lo manda el check (solo_staff, etc.)
+        pass  # el mensaje ya lo manda el check correspondiente
     elif isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("❌ Falta un dato. Usá `r!ayuda` para ver cómo se usa el comando.")
     elif isinstance(error, commands.MemberNotFound):
@@ -46,32 +42,25 @@ async def on_command_error(ctx, error):
 async def ayuda(ctx):
     embed = discord.Embed(title="📖 Comandos disponibles", color=discord.Color.blue())
     embed.add_field(
-        name="👤 Jugadores",
-        value="`r!yo` `r!perfil @usuario` `r!posiciones` `r!jugadores` `r!buscar <nombre>`",
-        inline=False
-    )
-    embed.add_field(
         name="⚽ Partidos",
-        value="`r!partido` `r!convocatoria` `r!plantilla` `r!formacion`",
-        inline=False
-    )
-    embed.add_field(
-        name="📊 Estadísticas",
-        value="`r!stats` `r!stats @usuario`",
-        inline=False
-    )
-    embed.add_field(
-        name="🔒 Staff",
         value=(
-            "`r!registrar @usuario` `r!editar @usuario` `r!eliminar @usuario` "
-            "`r!rango` `r!estado` `r!gol` `r!asistencia`\n"
-            "`r!partido crear` `r!partido capitan` `r!partido finalizar`"
+            "`r!partido` — ver el próximo partido\n"
+            "`r!convocatoria [ID]` — ver quién confirmó asistencia"
         ),
         inline=False
     )
     embed.add_field(
-        name="🔒 Administración",
-        value="`r!config` (ver todas las opciones con `r!config`)",
+        name="🔒 Encargados",
+        value=(
+            "`r!partido crear` — crear un partido subiendo una imagen\n"
+            "`r!partido finalizar ID`\n"
+            "`r!asignar_seccion @usuario primer_equipo/cantera/visorias`"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="🔒 Solo Administrador",
+        value="`r!setup_estructura` — crea categorías, roles y canales de Primer Equipo/Cantera/Visorías",
         inline=False
     )
     await ctx.send(embed=embed)
